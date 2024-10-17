@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFrown } from '@fortawesome/free-solid-svg-icons';
 import './App.css';
-import { Atom } from 'react-loading-indicators'; 
+import { Atom } from 'react-loading-indicators';
 
 function Weatherapp() {
   const [input, setInput] = useState('');
@@ -12,6 +12,38 @@ function Weatherapp() {
     data: {},
     error: false,
   });
+  const [suggestions, setSuggestions] = useState([]);
+  const apiKey = 'e754369601dcc3ba9ba7f1fd4bfe8184'; 
+
+ 
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        func(...args);
+      }, delay);
+    };
+  };
+
+  const fetchSuggestions = async (query) => {
+    if (query.length > 1) {
+      const geoUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=5&appid=${apiKey}`;
+      try {
+        const response = await axios.get(geoUrl);
+        setSuggestions(response.data);
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+      }
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+
+  const debouncedFetchSuggestions = debounce(fetchSuggestions, 200);
 
   const toDateFunction = () => {
     const months = [
@@ -29,17 +61,16 @@ function Weatherapp() {
   const search = async (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      setInput('');
       setWeather({ ...weather, loading: true });
+      setSuggestions([]);
 
-      // OpenWeather API Endpoint with your API key
-      const apiKey = 'e754369601dcc3ba9ba7f1fd4bfe8184'; // Replace with your actual API key
       const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${input}&appid=${apiKey}&units=metric`;
 
       try {
         const weatherResponse = await axios.get(weatherUrl);
         setWeather({ data: weatherResponse.data, loading: false, error: false });
       } catch (error) {
+        console.error('Error fetching weather:', error);
         setWeather({ ...weather, data: {}, error: true });
       }
     }
@@ -53,11 +84,28 @@ function Weatherapp() {
           type="text"
           className="city-search"
           placeholder="Enter City Name.."
-          name="query"
           value={input}
-          onChange={(event) => setInput(event.target.value)}
+          onChange={(event) => {
+            setInput(event.target.value);
+            debouncedFetchSuggestions(event.target.value);
+          }}
           onKeyPress={search}
         />
+        {suggestions.length > 0 && (
+          <ul className="suggestions-list">
+            {suggestions.map((suggestion, index) => (
+              <li
+                key={index}
+                onClick={() => {
+                  setInput(`${suggestion.name}, ${suggestion.country}`);
+                  setSuggestions([]);
+                }}
+              >
+                {suggestion.name}, {suggestion.country}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {weather.loading && (
@@ -79,7 +127,7 @@ function Weatherapp() {
         </>
       )}
 
-      {weather && weather.data && weather.data.main && (
+      {weather.data && weather.data.main && (
         <div className="weather-card">
           <div className="city-name">
             <h2>
